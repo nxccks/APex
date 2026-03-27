@@ -94,19 +94,40 @@ The goal of APex is to reduce the manual effort required during mobile applicati
    cp .env.example .env # Add your API keys here
    ```
 
-4. **Run APex:**
-   ```bash
-   python backend/main.py
-   ```
-
 ---
 
 ## Usage
-1.  **Upload:** Drag an APK into the APex Dashboard.
-2.  **Analyze:** Run the Static Scan to find hardcoded secrets.
-3.  **Inject:** Select a script from your `/frida-scripts` library and click **Inject**.
-4.  **AI Bypass:** If traffic is blocked, use "Generate AI Hook" to analyze Smali and create a custom bypass.
-5.  **Exfiltrate:** Use the "Dump Data" button to pull internal files to your local `/downloads` folder.
+APex is a pure Command Line Interface (CLI) tool. Use the `apex.py` entry point to execute commands.
+
+**View Help:**
+```bash
+python apex.py --help
+```
+
+1. **Static Analysis (Scan):** Decompile and scan an APK for hardcoded secrets and security logic.
+   ```bash
+   python apex.py scan target_app.apk
+   ```
+
+2. **List Scripts:** View available scripts in your local directory.
+   ```bash
+   python apex.py list-scripts
+   ```
+
+3. **Dynamic Injection:** Inject a selected script into a running application.
+   ```bash
+   python apex.py inject com.example.app universal.js
+   ```
+
+4. **AI Bypass:** If standard scripts fail, save the target Smali code to a text file and ask AI to generate a custom hook.
+   ```bash
+   python apex.py generate-hook snippet.txt --category ssl_pinning
+   ```
+
+5. **Exfiltrate Data:** Pull all internal databases, shared preferences, and native libraries from a target app.
+   ```bash
+   python apex.py exfiltrate com.example.app
+   ```
 
 ---
 

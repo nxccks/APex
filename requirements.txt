@@ -1,8 +1,5 @@
-fastapi
-uvicorn
 frida-tools
 google-genai
 python-dotenv
 pyapktool
 scapy
-python-multipart
