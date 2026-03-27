@@ -1,91 +1,122 @@
-APex: AI-Powered APK Explorer & Exfiltrator
-APex is an advanced Android security orchestration suite designed to bridge the gap between static analysis and dynamic instrumentation. By integrating LLMs (Large Language Models) directly into the reverse-engineering workflow, APex automates the discovery and bypassing of complex security controls like SSL pinning and root detection.
+# 🛡️ APex: AI-Powered APK Explorer & Exfiltrator
 
-🎯 Project Goals & Purpose
-The goal of APex is to reduce the manual effort required during the initial phases of a mobile application penetration test. It aims to:
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3.10+-blue.svg" alt="Python Version">
+  <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License">
+  <img src="https://img.shields.io/badge/AI-Gemini%20|%20Claude-orange.svg" alt="AI Powered">
+  <img src="https://img.shields.io/badge/Framework-FastAPI-009688.svg" alt="FastAPI">
+</p>
 
-Automate the "Boring" Stuff: Fast-track APK decompilation, secret sniffing, and permission auditing.
+**APex** is an advanced Android security orchestration suite designed to bridge the gap between static analysis and dynamic instrumentation. By integrating Large Language Models (LLMs) directly into the reverse-engineering workflow, APex automates the discovery and bypassing of complex security controls like SSL pinning and root detection.
 
-Bridge RE Gaps with AI: Use AI to interpret obfuscated Smali logic and generate functional Frida hooks.
+---
 
-Centralize Exfiltration: Provide a one-click solution for dumping sensitive app data (databases, native libs, and configurations).
+## 📖 Table of Contents
+- [🎯 Project Goals](#-project-goals)
+- [✨ Key Features](#-key-features)
+- [🛠️ Tech Stack](#-tech-stack)
+- [🚀 Getting Started](#-getting-started)
+  - [Prerequisites](#prerequisites)
+  - [Installation](#installation)
+- [📖 Usage](#-usage)
+- [🤝 Contributing](#-contributing)
+- [⚖️ Disclaimer](#-disclaimer)
+- [📄 License](#-license)
 
-Flexible Orchestration: Offer a "Bring Your Own Script" (BYOS) environment for seasoned pentesters.
+---
 
-✨ Key Features
-🔍 1. Intelligent Static Analysis (SAST)
-Automated Decompilation: Leverages apktool to crack open APKs instantly.
+## 🎯 Project Goals
+The goal of APex is to reduce the manual effort required during mobile application penetration tests by:
+*   **Automating the "Boring" Stuff:** Fast-track APK decompilation, secret sniffing, and permission auditing.
+*   **Bridging RE Gaps with AI:** Use AI to interpret obfuscated Smali logic and generate functional Frida hooks.
+*   **Centralizing Exfiltration:** Provide a one-click solution for dumping sensitive app data (databases, native libs, configurations).
+*   **Flexible Orchestration:** Offer a "Bring Your Own Script" (BYOS) environment for seasoned pentesters.
 
-Secret Sniffer: Regex-based scanning for API keys, Firebase URLs, hardcoded credentials, and RSA keys.
+---
 
-Manifest Auditor: Identifies dangerous permissions and exported components that lead to Intent Redirection or Provider leakage.
+## ✨ Key Features
 
-💉 2. Dynamic Instrumentation (DAST)
-Frida Orchestrator: Attach to running processes and inject JS hooks on the fly.
+### 🔍 1. Intelligent Static Analysis (SAST)
+*   **Automated Decompilation:** Leverages `apktool` to crack open APKs instantly.
+*   **Secret Sniffer:** Regex-based scanning for API keys, Firebase URLs, hardcoded credentials, and RSA keys.
+*   **Manifest Auditor:** Identifies dangerous permissions and exported components (Intent Redirection, Provider leakage).
 
-BYOS Logic: Includes a dedicated /frida-scripts directory. Just drop your universal.js or multiple.js into the folder, and APex will auto-detect and load them via the dashboard.
+### 💉 2. Dynamic Instrumentation (DAST)
+*   **Frida Orchestrator:** Attach to processes and inject JS hooks on the fly.
+*   **BYOS Logic:** Dedicated `/frida-scripts` directory with auto-detection for custom scripts.
 
-🤖 3. AI-Assisted Bypass Engine
-Surgical Hooking: When standard scripts fail, APex extracts the relevant Smali code for the security check.
+### 🤖 3. AI-Assisted Bypass Engine
+*   **Surgical Hooking:** Extracts relevant Smali code for failed security checks.
+*   **LLM Integration:** Connects to Gemini/Claude to generate custom JS hooks tailored to specific app implementations.
 
-LLM Integration: Connects to Gemini (or Claude) to analyze the logic and generate a custom JavaScript hook tailored specifically to that app’s implementation.
+### 💾 4. Data Exfiltration Suite
+*   **Database Dumper:** Automatically pulls SQLite `.db` files from `/data/data/[pkg]/`.
+*   **Native Library Extraction:** Pulls `.so` files for offline binary analysis (Ghidra/IDA).
+*   **Config Grabber:** Extracts `shared_prefs` and other XML configurations.
 
-💾 4. Data Exfiltration Suite
-Database Dumper: Automatically pulls SQLite .db files from /data/data/[pkg]/.
+---
 
-Native Library Extraction: Pulls .so files for offline binary analysis (Ghidra/IDA).
+## 🛠️ Tech Stack
+| Category | Tools/Frameworks |
+| :--- | :--- |
+| **Backend** | Python 3.10+, FastAPI |
+| **Analysis** | Scapy, Frida-Tools, Apktool |
+| **AI** | Google Generative AI (Gemini API) |
+| **Frontend** | JavaScript (ES6+), Tailwind CSS |
+| **Database** | SQLite |
 
-Config Grabber: Extracts shared_prefs and other XML configurations.
+---
 
-🛠️ Tech Stack
-Backend: Python 3.10+, FastAPI
+## 🚀 Getting Started
 
-Analysis: Scapy, Frida-Tools, Apktool
+### Prerequisites
+- Python 3.10+
+- **ADB** (Android Debug Bridge) in your system PATH.
+- A **rooted** Android device or emulator with `frida-server` running.
+- (Optional) API Key for Gemini or Claude.
 
-AI: Google Generative AI (Gemini API)
+### Installation
 
-Frontend: JavaScript (ES6+), Tailwind CSS
+1. **Clone the Repository:**
+   ```bash
+   git clone https://github.com/your-username/apex-toolkit.git
+   cd apex-toolkit
+   ```
 
-Database: SQLite (for local device tracking)
+2. **Add Your Scripts:**
+   Place your existing Frida scripts in the `frida-scripts/` directory.
 
-🚀 Getting Started
-Prerequisites
-Python 3.10+
+3. **Setup Environment:**
+   ```bash
+   pip install -r requirements.txt
+   cp .env.example .env # Add your API keys here
+   ```
 
-ADB (Android Debug Bridge) in your system PATH.
+4. **Run APex:**
+   ```bash
+   python backend/main.py
+   ```
 
-A rooted Android device or emulator with frida-server running.
+---
 
-(Optional) An API Key for Gemini or Claude for AI features.
+## 📖 Usage
+1.  **Upload:** Drag an APK into the APex Dashboard.
+2.  **Analyze:** Run the Static Scan to find hardcoded secrets.
+3.  **Inject:** Select a script from your `/frida-scripts` library and click **Inject**.
+4.  **AI Bypass:** If traffic is blocked, use "Generate AI Hook" to analyze Smali and create a custom bypass.
+5.  **Exfiltrate:** Use the "Dump Data" button to pull internal files to your local `/downloads` folder.
 
-Installation
-Clone the Repository:
+---
 
-Bash
-git clone https://github.com/your-username/apex-toolkit.git
-cd apex-toolkit
-Add Your Scripts:
-Place your existing Frida scripts in the frida-scripts/ directory.
+## 🤝 Contributing
+Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
 
-Setup Environment:
+---
 
-Bash
-pip install -r requirements.txt
-cp .env.example .env # Add your API keys here
-Run APex:
+## ⚖️ Disclaimer
+APex is intended for **authorized security auditing and educational purposes only**. Unauthorized access to computer systems is illegal. The author is not responsible for any misuse of this tool.
 
-Bash
-python backend/main.py
-📖 Usage
-Upload: Drag an APK into the APex Dashboard.
+---
 
-Analyze: Run the Static Scan to find hardcoded secrets.
-
-Inject: Select a script from your /frida-scripts library and click Inject.
-
-AI Bypass: If traffic is still blocked, select the "Generate AI Hook" option to have APex analyze the Smali and create a custom bypass.
-
-Exfiltrate: Use the "Dump Data" button to pull all internal files to your local /downloads folder.
-
-⚖️ Disclaimer
-APex is intended for authorized security auditing and educational purposes only. Unauthorized access to computer systems is illegal. The author is not responsible for any misuse of this tool.
+## 📄 License
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
