@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import argparse
 import sys
 import json
@@ -9,164 +10,122 @@ from backend.core.dumper import ADBDumper
 from backend.ai.provider import AIProviderFactory
 from backend.config import config
 
-# --- UI Enhancements ---
+# --- UI Styling ---
+def clr(text, color_code):
+    return f"\033[{color_code}m{text}\033[0m"
 
-BANNER = r"""
-      ___           ___           ___           ___     
-     /\  \         /\  \         /\  \         /\  \    
-    /::\  \       /::\  \       /::\  \        \:\  \   
-   /:/\:\  \     /:/\:\  \     /:/\:\  \        \:\  \  
-  /::\~\:\  \   /::\~\:\  \   /::\~\:\  \       /::\  \ 
- /:/\:\ \:\__\ /:/\:\ \:\__\ /:/\:\ \:\__\     /:/\:\__\
- \/__\:\/:/  / \/__\:\/:/  / \:\~\:\ \/__/    /:/  \/__/
-      \::/  /       \::/  /   \:\ \:\__\     /:/  /     
-      /:/  /        /:/  /     \:\ \/__/     \/__/      
-     /:/  /        /:/  /       \:\__\                  
-     \/__/         \/__/         \/__/                  
-                                                        
-          AI-Powered APK Explorer & Exfiltrator
-"""
-
-def get_centered(text, width):
-    lines = text.split('\n')
-    return "\n".join(line.center(width) for line in lines)
-
-def print_banner():
+def print_header():
     width = shutil.get_terminal_size().columns
-    # Cyan/Blue-ish color for the banner
-    print("\033[96m" + get_centered(BANNER, width) + "\033[0m")
-    print("-" * width)
+    print("\n" + clr("=" * 60, "96").center(width))
+    print(clr("🛡️  APEX: AI-Powered APK Explorer & Exfiltrator", "96;1").center(width))
+    print(clr("=" * 60, "96").center(width) + "\n")
+
+def interactive_menu():
+    while True:
+        os.system('cls' if os.name == 'nt' else 'clear')
+        print_header()
+        width = shutil.get_terminal_size().columns
+        
+        print(clr("[ MAIN MENU ]", "93").center(width))
+        print("1. 🔍 Scan APK (Static Analysis)".center(width))
+        print("2. 💉 Inject Frida Script (Dynamic)".center(width))
+        print("3. 🤖 Generate AI Bypass Hook".center(width))
+        print("4. 💾 Exfiltrate App Data (ADB)".center(width))
+        print("5. 📜 List Local Scripts".center(width))
+        print("0. 🚪 Exit".center(width))
+        print("\n" + clr("-" * 20, "90").center(width))
+        
+        choice = input(clr("\nSelect an option > ", "92")).strip()
+
+        if choice == '1':
+            path = input(clr("Enter APK path: ", "94")).strip()
+            if os.path.exists(path):
+                scanner = APKScanner(path)
+                if scanner.decompile():
+                    findings = scanner.find_security_logic()
+                    print(clr("\n[+] Findings:", "92"))
+                    print(json.dumps(findings, indent=2))
+                else: print(clr("[-] Decompilation failed.", "91"))
+            else: print(clr("[-] File not found.", "91"))
+
+        elif choice == '2':
+            pkg = input(clr("Enter Package Name: ", "94")).strip()
+            script = input(clr("Enter Script Name (e.g. universal.js): ", "94")).strip()
+            orch = FridaOrchestrator(pkg)
+            if orch.attach_and_inject(script): print(clr("[+] Injection Success!", "92"))
+            else: print(clr("[-] Injection Failed.", "91"))
+
+        elif choice == '3':
+            file_path = input(clr("Enter path to Smali snippet file: ", "94")).strip()
+            if os.path.exists(file_path):
+                with open(file_path, 'r') as f: code = f.read()
+                cat = input(clr("Category (default: ssl_pinning): ", "94")).strip() or "ssl_pinning"
+                try:
+                    provider = AIProviderFactory.get_provider()
+                    hook = provider.generate_hook(code, cat)
+                    out = os.path.join(config.FRIDA_SCRIPTS_PATH, "ai_generated.js")
+                    with open(out, "w") as f: f.write(hook)
+                    print(clr(f"\n[+] Saved to {out}\n", "92") + clr(hook, "93"))
+                except Exception as e: print(clr(f"[-] AI Error: {e}", "91"))
+            else: print(clr("[-] File not found.", "91"))
+
+        elif choice == '4':
+            pkg = input(clr("Enter Package Name: ", "94")).strip()
+            dumper = ADBDumper(pkg)
+            results = dumper.pull_data()
+            for r in results:
+                status = "✅" if r['status'] == 'pulled' else "❌"
+                print(f"  {status} {r['target']}")
+
+        elif choice == '5':
+            scripts = FridaOrchestrator(None).list_scripts()
+            print(clr("\n[+] Script Library:", "92"))
+            for s in scripts: print(f"  - {s}")
+
+        elif choice == '0':
+            print(clr("Exiting APex...", "96"))
+            break
+        
+        input(clr("\nPress Enter to return to menu...", "90"))
 
 def main():
-    # Only show banner if no arguments or help is requested
-    if len(sys.argv) == 1 or "-h" in sys.argv or "--help" in sys.argv:
-        print_banner()
-
-    parser = argparse.ArgumentParser(
-        description="🛡️  APex CLI: Security Orchestration for Android",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        add_help=False # We handle help manually for better styling
-    )
+    parser = argparse.ArgumentParser(description="🛡️  APex CLI", add_help=False)
+    parser.add_argument('-h', '--help', action='help')
+    subparsers = parser.add_subparsers(dest="command")
     
-    # Re-adding help for subcommands
-    parser.add_argument('-h', '--help', action='help', help='Show this help message and exit')
+    # Define subparsers for CLI (keeping argument support)
+    scan_p = subparsers.add_parser("scan")
+    scan_p.add_argument("apk_path")
     
-    subparsers = parser.add_subparsers(dest="command", help="Available commands")
+    inject_p = subparsers.add_parser("inject")
+    inject_p.add_argument("package_name")
+    inject_p.add_argument("script_name")
+    
+    hook_p = subparsers.add_parser("generate-hook")
+    hook_p.add_argument("smali_file")
+    
+    exfil_p = subparsers.add_parser("exfiltrate")
+    exfil_p.add_argument("package_name")
+    
+    subparsers.add_parser("list-scripts")
 
-    # 1. Scan
-    scan_parser = subparsers.add_parser("scan", help="Decompile and scan an APK for security logic (SAST)")
-    scan_parser.add_argument("apk_path", help="Path to the APK file to analyze")
-
-    # 2. List Scripts
-    subparsers.add_parser("list-scripts", help="List available Frida scripts")
-
-    # 3. Inject
-    inject_parser = subparsers.add_parser("inject", help="Inject a Frida script into a running app (DAST)")
-    inject_parser.add_argument("package_name", help="Target app package name")
-    inject_parser.add_argument("script_name", help="Name of the script to inject")
-
-    # 4. Generate AI Hook
-    hook_parser = subparsers.add_parser("generate-hook", help="Ask AI to generate a custom Frida bypass hook")
-    hook_parser.add_argument("smali_file", help="Path to a text file containing the target Smali code")
-    hook_parser.add_argument("--category", default="ssl_pinning", help="Bypass category")
-
-    # 5. Exfiltrate
-    exfil_parser = subparsers.add_parser("exfiltrate", help="Pull sensitive data from the device")
-    exfil_parser.add_argument("package_name", help="Target app package name")
-
-    # Center the help options if no command provided
+    # If no arguments, enter INTERACTIVE MODE
     if len(sys.argv) == 1:
-        width = shutil.get_terminal_size().columns
-        print("\n" + "\033[93m[ AVAILABLE COMMANDS ]\033[0m".center(width))
-        commands_list = [
-            "scan            : Decompile and find security logic",
-            "list-scripts    : View your Frida script library",
-            "inject          : Attach and bypass security checks",
-            "generate-hook   : Use LLM to create surgical hooks",
-            "exfiltrate      : Dump databases and native libs"
-        ]
-        for cmd in commands_list:
-            print(cmd.center(width))
-        print("\n" + "Run 'python apex.py [command] --help' for details.".center(width) + "\n")
-        sys.exit(0)
+        interactive_menu()
+        return
 
     args = parser.parse_args()
 
-    # --- Command Execution ---
-
+    # (Logic for CLI arguments - similar to interactive blocks above)
     if args.command == "scan":
-        if not os.path.exists(args.apk_path):
-            print(f"\033[91m[-] Error: File not found at {args.apk_path}\033[0m")
-            sys.exit(1)
-            
-        print(f"\033[94m[*] Starting APex Scanner on {args.apk_path}...\033[0m")
         scanner = APKScanner(args.apk_path)
-        
-        if scanner.decompile():
-            print("\033[92m[*] Decompilation successful. Hunting for security logic...\033[0m")
-            findings = scanner.find_security_logic()
-            print(f"\n\033[92m[+] Scan Complete! Found {len(findings)} points of interest:\033[0m\n")
-            print(json.dumps(findings, indent=2))
-        else:
-            print("\033[91m[-] Decompilation failed. Ensure Java is installed and working.\033[0m")
-            sys.exit(1)
-
+        if scanner.decompile(): print(json.dumps(scanner.find_security_logic(), indent=2))
     elif args.command == "list-scripts":
-        orchestrator = FridaOrchestrator(None)
-        scripts = orchestrator.list_scripts()
-        print("\n\033[92m[+] Available Frida Scripts:\033[0m")
-        if not scripts:
-            print("  (No scripts found in frida-scripts/)")
-        for s in scripts:
-            print(f"  - {s}")
-        print()
-
+        for s in FridaOrchestrator(None).list_scripts(): print(f"  - {s}")
     elif args.command == "inject":
-        print(f"\033[94m[*] Attaching to {args.package_name} and injecting {args.script_name}...\033[0m")
-        orchestrator = FridaOrchestrator(args.package_name)
-        if orchestrator.attach_and_inject(args.script_name):
-            print(f"\033[92m[+] Successfully injected {args.script_name}!\033[0m")
-        else:
-            print(f"\033[91m[-] Failed to inject script. Is frida-server running and the app open?\033[0m")
-            sys.exit(1)
-
-    elif args.command == "generate-hook":
-        if not os.path.exists(args.smali_file):
-            print(f"\033[91m[-] Error: Smali text file not found at {args.smali_file}\033[0m")
-            sys.exit(1)
-            
-        with open(args.smali_file, 'r') as f:
-            smali_code = f.read()
-            
-        print(f"\033[94m[*] Analyzing Smali code with AI ({config.AI_PROVIDER})...\033[0m")
-        try:
-            provider = AIProviderFactory.get_provider()
-            hook = provider.generate_hook(smali_code, args.category)
-            
-            if not os.path.exists(config.FRIDA_SCRIPTS_PATH):
-                os.makedirs(config.FRIDA_SCRIPTS_PATH)
-                
-            out_path = os.path.join(config.FRIDA_SCRIPTS_PATH, "ai_generated.js")
-            with open(out_path, "w") as f:
-                f.write(hook)
-                
-            print(f"\033[92m[+] Success! Hook generated and saved to: {out_path}\033[0m\n")
-            print("\033[93m--- Generated Hook ---\033[0m")
-            print(hook)
-            print("\033[93m----------------------\033[0m")
-        except Exception as e:
-            print(f"\033[91m[-] AI Generation failed: {e}\033[0m")
-
+        FridaOrchestrator(args.package_name).attach_and_inject(args.script_name)
     elif args.command == "exfiltrate":
-        print(f"\033[94m[*] Initiating ADB data exfiltration for {args.package_name}...\033[0m")
-        dumper = ADBDumper(args.package_name)
-        results = dumper.pull_data()
-        
-        print("\n\033[92m[+] Exfiltration Results:\033[0m")
-        for r in results:
-            status = "✅" if r['status'] == 'pulled' else "❌"
-            print(f"  {status} {r['target']} -> {r.get('status')}")
-        print(f"\n[*] Check the './downloads/{args.package_name}' directory for your loot.")
+        ADBDumper(args.package_name).pull_data()
 
 if __name__ == "__main__":
     main()
