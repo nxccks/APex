@@ -1,7 +1,8 @@
 fastapi
 uvicorn
 frida-tools
-google-generativeai
+google-genai
 python-dotenv
 pyapktool
 scapy
+python-multipart
