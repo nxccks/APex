@@ -10,6 +10,14 @@ from backend.core.dumper import ADBDumper
 
 app = FastAPI(title="APex: AI-Powered APK Explorer")
 
+@app.get("/")
+async def root():
+    return {
+        "message": "APex Backend is running!",
+        "documentation": "/docs",
+        "status": "healthy"
+    }
+
 @app.post("/exfiltrate/{package_name}")
 async def exfiltrate_data(package_name: str):
     dumper = ADBDumper(package_name)
