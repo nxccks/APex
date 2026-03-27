@@ -15,24 +15,14 @@ class APKScanner:
         if not os.path.exists(config.TEMP_DECOMPILED_PATH):
             os.makedirs(config.TEMP_DECOMPILED_PATH)
         
-        # Since 'python -m pyapktool' failed because it lacks __main__.py, 
-        # we will try to find the absolute path of the script or call it directly via shell.
+        # Call pyapktool's Apktool class directly via python -c
         try:
-            # First attempt: Try calling the script name directly with shell=True
-            # This works if the script is in PATH or registered as an entry point
-            subprocess.run(["pyapktool", "d", self.apk_path, "-o", self.output_dir, "-f"], check=True, shell=True)
+            cmd = f"{sys.executable} -c \"from pyapktool.pyapktool import Apktool; a=Apktool('pyapktool_tools'); a.get(); a.unpack(r'{self.apk_path}', r'{self.output_dir}')\""
+            subprocess.run(cmd, check=True, shell=True)
             return True
-        except subprocess.CalledProcessError:
-            # Second attempt: Try calling the python script directly if we can find it
-            print("[*] Primary command failed, attempting alternate entry point...")
-            try:
-                # The module is named pyapktool inside the pyapktool package
-                cmd = f"{sys.executable} -c \"from pyapktool.pyapktool import main; import sys; sys.argv=['pyapktool', r'{self.apk_path}']; main()\""
-                subprocess.run(cmd, check=True, shell=True)
-                return True
-            except Exception as e:
-                print(f"Decompilation failed: {e}")
-                return False
+        except Exception as e:
+            print(f"Decompilation failed: {e}")
+            return False
 
     def find_security_logic(self):
         """Searches for SSL pinning and root detection patterns in Smali files"""

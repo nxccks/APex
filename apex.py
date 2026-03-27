@@ -13,17 +13,17 @@ from backend.ai.provider import AIProviderFactory
 from backend.config import config
 
 # --- UI Styling ---
+BLOCK_WIDTH = 45
+
 def clr(text, color_code=None):
     return text
 
 def strip_ansi(text):
     return text
 
-def get_indent(text_len=20):
+def get_indent():
     width = shutil.get_terminal_size().columns
-    # Use a fixed indentation that feels "centered" as a block but is left-aligned
-    # 1/4 of terminal width is a good balance
-    return max(0, (width - 60) // 2)
+    return max(0, (width - BLOCK_WIDTH) // 2)
 
 def left_print(text, color_code=None):
     indent = get_indent()
@@ -44,13 +44,8 @@ BANNER = r"""
 """
 
 def print_header():
-    width = shutil.get_terminal_size().columns
     lines = BANNER.strip("\n").split("\n")
-    # Find the longest line to center the whole block
-    max_len = max(len(line) for line in lines)
-    indent = (width - max_len) // 2
-    if indent < 0: indent = 0
-    
+    indent = get_indent()
     for line in lines:
         print(" " * indent + line)
     print("\n")
