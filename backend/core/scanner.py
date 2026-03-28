@@ -13,116 +13,100 @@ class APKScanner:
         self.apktool_jar = os.path.join("pyapktool_tools", "apktool.jar")
 
     def decompile(self):
-        """Decompiles the APK using the managed apktool.jar directly for maximum reliability"""
-        print(f"[*] Decompiling {self.apk_path}...")
-        
+        """Decompiles the APK using the managed apktool.jar directly"""
         if not os.path.exists(config.TEMP_DECOMPILED_PATH):
             os.makedirs(config.TEMP_DECOMPILED_PATH)
 
-        # 1. Ensure the tools are downloaded via pyapktool first (if not already there)
-        try:
-            import pyapktool.pyapktool as pat
-            # This ensures apktool.jar exists in pyapktool_tools/
-            apktool_obj = pat.Apktool("pyapktool_tools")
-            apktool_obj.get()
-        except ImportError:
-            print("[-] Error: pyapktool package not found.")
-            return False
-
-        # 2. Run the jar directly to support -o and -f flags properly
         if not os.path.exists(self.apktool_jar):
-            print(f"[-] Error: {self.apktool_jar} not found.")
-            return False
+            try:
+                import pyapktool.pyapktool as pat
+                pat.Apktool("pyapktool_tools").get()
+            except ImportError:
+                return False
 
         try:
-            # Command: java -jar apktool.jar d <apk> -o <out> -f
             cmd = ["java", "-jar", self.apktool_jar, "d", self.apk_path, "-o", self.output_dir, "-f"]
             subprocess.run(cmd, check=True, shell=True, capture_output=True)
             return True
-        except subprocess.CalledProcessError as e:
-            print(f"[-] Decompilation failed: {e.stderr.decode(errors='ignore')}")
+        except subprocess.CalledProcessError:
             return False
 
     def find_manifest_risks(self):
-        """Parses AndroidManifest.xml for dangerous permissions and exported components"""
-        risks = {"permissions": [], "exported_components": [], "debuggable": False}
+        """Parses AndroidManifest.xml for misconfigurations"""
+        risks = {
+            "permissions": [],
+            "exported_components": [],
+            "debuggable": False,
+            "allow_backup": True,
+            "cleartext_traffic": False
+        }
         if not os.path.exists(self.manifest_path):
             return risks
 
         try:
             tree = ET.parse(self.manifest_path)
             root = tree.getroot()
-            
-            # Check if debuggable
+            ns = {'android': 'http://schemas.android.com/apk/res/android'}
+
             application = root.find('application')
             if application is not None:
-                debuggable = application.get('{http://schemas.android.com/apk/res/android}debuggable')
-                if debuggable == "true":
-                    risks["debuggable"] = True
+                risks["debuggable"] = application.get('{http://schemas.android.com/apk/res/android}debuggable') == "true"
+                risks["allow_backup"] = application.get('{http://schemas.android.com/apk/res/android}allowBackup') != "false"
+                risks["cleartext_traffic"] = application.get('{http://schemas.android.com/apk/res/android}usesCleartextTraffic') == "true"
 
-            # Check for dangerous permissions
-            dangerous_perms = [
-                "android.permission.READ_SMS", "android.permission.RECEIVE_SMS",
-                "android.permission.READ_CONTACTS", "android.permission.CAMERA",
-                "android.permission.ACCESS_FINE_LOCATION", "android.permission.RECORD_AUDIO"
-            ]
+                for tag in ['activity', 'service', 'receiver', 'provider']:
+                    for comp in application.findall(tag):
+                        if comp.get('{http://schemas.android.com/apk/res/android}exported') == "true":
+                            risks["exported_components"].append(f"{tag.capitalize()}: {comp.get('{http://schemas.android.com/apk/res/android}name')}")
+
+            dangerous_perms = ["READ_SMS", "RECEIVE_SMS", "READ_CONTACTS", "CAMERA", "ACCESS_FINE_LOCATION", "RECORD_AUDIO", "READ_EXTERNAL_STORAGE"]
             for perm in root.findall('uses-permission'):
-                name = perm.get('{http://schemas.android.com/apk/res/android}name')
+                name = perm.get('{http://schemas.android.com/apk/res/android}name', "").split('.')[-1]
                 if name in dangerous_perms:
                     risks["permissions"].append(name)
-
-            # Check for exported components
-            for tag in ['activity', 'service', 'receiver', 'provider']:
-                for comp in application.findall(tag):
-                    exported = comp.get('{http://schemas.android.com/apk/res/android}exported')
-                    name = comp.get('{http://schemas.android.com/apk/res/android}name')
-                    if exported == "true":
-                        risks["exported_components"].append({"type": tag, "name": name})
-        except Exception as e:
-            print(f"[-] Error parsing manifest: {e}")
-        
+        except:
+            pass
         return risks
 
     def find_security_logic(self):
-        """Comprehensive scan for security logic, secrets, and insecure patterns"""
+        """Comprehensive scan for vulnerabilities and secrets"""
         patterns = {
-            "ssl_pinning": [
-                r"X509TrustManager", r"checkServerTrusted", r"CertificatePinner", r"OkHttpClient"
-            ],
-            "root_detection": [
-                r"/system/app/Superuser.apk", r"root-checker", r"which su", r"test-keys", r"bin/su"
-            ],
-            "hardcoded_secrets": [
-                r"AIza[0-9A-Za-z-_]{35}", 
-                r"AKIA[0-9A-Z]{16}",       
-                r"https://.*\.firebaseio\.com",
-                r"-----BEGIN RSA PRIVATE KEY-----"
-            ],
-            "insecure_webview": [
-                r"setJavaScriptEnabled\(1\)", r"setAllowFileAccess\(1\)"
-            ]
+            "Secrets & API Keys": {
+                "Google API Key": r"AIza[0-9A-Za-z-_]{35}",
+                "AWS Access Key": r"AKIA[0-9A-Z]{16}",
+                "Firebase URL": r"https://.*\.firebaseio\.com",
+                "Private Key": r"-----BEGIN RSA PRIVATE KEY-----",
+                "Generic Secret": r"(?i)(api_key|secret_key|auth_token|db_password)\s*[:=]\s*['\"]([^'\"]+)['\"]"
+            },
+            "Network & API Endpoints": {
+                "HTTP Endpoint": r"http://[a-zA-Z0-9\./_-]+",
+                "Internal IP": r"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b"
+            },
+            "Insecure Code Patterns": {
+                "Insecure WebView": r"setJavaScriptEnabled\(1\)|setAllowFileAccess\(1\)",
+                "Weak Crypto (MD5/SHA1)": r"MD5|SHA1",
+                "World Readable File": r"MODE_WORLD_READABLE|MODE_WORLD_WRITEABLE"
+            },
+            "Security Protections": {
+                "SSL Pinning Logic": r"X509TrustManager|checkServerTrusted|CertificatePinner",
+                "Root Detection": r"Superuser\.apk|root-checker|which su|test-keys"
+            }
         }
         
-        results = {"manifest_risks": self.find_manifest_risks(), "smali_findings": []}
-        if not os.path.exists(self.output_dir):
-            return results
-
+        report = {"Manifest Risks": self.find_manifest_risks(), "Code Findings": {}}
+        
         for root, dirs, files in os.walk(self.output_dir):
             for file in files:
                 if file.endswith(".smali"):
                     file_path = os.path.join(root, file)
                     with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
                         content = f.read()
-                        for category, regex_list in patterns.items():
-                            for regex in regex_list:
-                                if re.search(regex, content, re.IGNORECASE):
-                                    match = re.search(regex, content, re.IGNORECASE)
-                                    start = max(0, content.rfind('.method', 0, match.start()))
-                                    end = content.find('.end method', match.end()) + 11
-                                    if start != -1 and end != -1:
-                                        results["smali_findings"].append({
-                                            "file": os.path.relpath(file_path, self.output_dir),
-                                            "category": category,
-                                            "code": content[start:end]
-                                        })
-        return results
+                        for category, sub_patterns in patterns.items():
+                            if category not in report["Code Findings"]: report["Code Findings"][category] = []
+                            for name, regex in sub_patterns.items():
+                                matches = re.findall(regex, content)
+                                if matches:
+                                    # Clean up matches for better reporting
+                                    clean_matches = list(set([str(m[1]) if isinstance(m, tuple) else str(m) for m in matches]))
+                                    report["Code Findings"][category].append({"type": name, "file": os.path.relpath(file_path, self.output_dir), "matches": clean_matches[:5]})
+        return report

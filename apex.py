@@ -23,14 +23,12 @@ BANNER = r"""
 
 def print_header():
     print()
-    # Print the banner which already has built-in spacing, plus our indent
     for line in BANNER.split('\n'):
         if line.strip():
             print(INDENT + line)
     print()
 
 def c_input(prompt_text="", newline=True):
-    """Displays an indented prompt and returns user input"""
     if prompt_text:
         if newline:
             print(INDENT + f"{prompt_text}")
@@ -38,6 +36,56 @@ def c_input(prompt_text="", newline=True):
         else:
             return input(INDENT + f"{prompt_text} > ").strip()
     return input(INDENT + "> ").strip()
+
+def print_report(data):
+    """Prints a professional, indented security report"""
+    print(INDENT + "=" * 60)
+    print(INDENT + "MOBILE SECURITY SCAN REPORT")
+    print(INDENT + "=" * 60 + "\n")
+
+    # 1. Manifest Analysis
+    m = data["Manifest Risks"]
+    print(INDENT + "[ MANIFEST CONFIGURATION ]")
+    print(INDENT + f"  - Debuggable:      {'[!!] YES' if m['debuggable'] else 'No'}")
+    print(INDENT + f"  - Allow Backup:    {'[!] YES' if m['allow_backup'] else 'No'}")
+    print(INDENT + f"  - Cleartext HTTP:  {'[!] YES' if m['cleartext_traffic'] else 'No'}")
+    
+    if m["permissions"]:
+        print(INDENT + "  - Sensitive Perms: " + ", ".join(m["permissions"]))
+    
+    if m["exported_components"]:
+        print(INDENT + "  - Exported Components:")
+        for comp in m["exported_components"][:5]:
+            print(INDENT + f"    * {comp}")
+        if len(m["exported_components"]) > 5:
+            print(INDENT + f"    (... {len(m['exported_components'])-5} more)")
+    print()
+
+    # 2. Code Findings
+    print(INDENT + "[ CODE-LEVEL FINDINGS ]")
+    findings_found = False
+    for category, findings in data["Code Findings"].items():
+        if findings:
+            findings_found = True
+            print(INDENT + f"  > {category}:")
+            # Group by type to avoid repetition
+            grouped = {}
+            for f in findings:
+                if f["type"] not in grouped: grouped[f["type"]] = []
+                grouped[f["type"]].append(f)
+            
+            for ftype, instances in grouped.items():
+                print(INDENT + f"    - {ftype} ({len(instances)} instances)")
+                for inst in instances[:2]: # Show first 2 files
+                    print(INDENT + f"      @ {inst['file']}")
+                    if inst['matches']:
+                        val = inst['matches'][0][:50] + "..." if len(inst['matches'][0]) > 50 else inst['matches'][0]
+                        print(INDENT + f"        Match: {val}")
+    
+    if not findings_found:
+        print(INDENT + "  - No critical code vulnerabilities detected.")
+    
+    print("\n" + INDENT + "=" * 60)
 
 def interactive_menu():
     while True:
@@ -72,11 +120,8 @@ def interactive_menu():
                 scanner = APKScanner(path)
                 if scanner.decompile():
                     findings = scanner.find_security_logic()
-                    print("\n" + INDENT + "[+] Findings:")
-                    # Indent JSON output
-                    formatted_json = json.dumps(findings, indent=4)
-                    for line in formatted_json.split('\n'):
-                        print(INDENT + line)
+                    print()
+                    print_report(findings)
                 else: print(INDENT + "[-] Decompilation failed.")
             else: print(INDENT + "[-] File not found.")
 
@@ -150,11 +195,9 @@ def main():
     args = parser.parse_args()
     if args.command == "scan":
         scanner = APKScanner(args.apk_path)
-        if scanner.decompile(): print(json.dumps(scanner.find_security_logic(), indent=2))
-    elif args.command == "list-scripts":
-        for s in FridaOrchestrator(None).list_scripts(): print(f"  - {s}")
-    elif args.command == "inject":
-        FridaOrchestrator(args.package_name).attach_and_inject(args.script_name)
+        if scanner.decompile():
+            report = scanner.find_security_logic()
+            print_report(report)
 
 if __name__ == "__main__":
     main()
