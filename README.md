@@ -1,4 +1,4 @@
-# 🛡️ APex: AI-Powered APK Explorer & Exfiltrator
+# APex: AI-Powered APK Explorer & Exfiltrator
 
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.10+-blue.svg?logo=python&logoColor=white" alt="Python Version">
@@ -12,18 +12,18 @@
 
 ---
 
-## 📖 Table of Contents
-- [🎯 Project Goals](#-project-goals)
-- [✨ Key Features](#-key-features)
-- [🛠️ Tech Stack](#-tech-stack)
-- [🚀 Getting Started](#-getting-started)
-- [📖 Usage Guide](#-usage-guide)
-- [🤝 Contributing](#-contributing)
-- [⚖️ Disclaimer](#-disclaimer)
+## Table of Contents
+- [Project Goals](#-project-goals)
+- [Key Features](#-key-features)
+- [Tech Stack](#-tech-stack)
+- [Getting Started](#-getting-started)
+- [Usage Guide](#-usage-guide)
+- [Contributing](#-contributing)
+- [Disclaimer](#-disclaimer)
 
 ---
 
-## 🎯 Project Goals
+## Project Goals
 The goal of APex is to reduce the manual effort required during mobile application penetration tests by:
 *   **Automating the "Boring" Stuff:** Fast-track APK decompilation, secret sniffing, and permission auditing.
 *   **Bridging RE Gaps with AI:** Use AI to interpret obfuscated Smali logic and generate functional Frida hooks.
@@ -32,26 +32,26 @@ The goal of APex is to reduce the manual effort required during mobile applicati
 
 ---
 
-## ✨ Key Features
+## Key Features
 
-### 🔍 1. Intelligent Static Analysis (SAST)
+### 1. Intelligent Static Analysis (SAST)
 *   **Automated Decompilation:** Leverages `pyapktool` to crack open APKs instantly.
 *   **Logic Extraction:** Automatically hunts for SSL pinning and root detection patterns in Smali files.
 
-### 💉 2. Dynamic Instrumentation (DAST)
+### 2. Dynamic Instrumentation (DAST)
 *   **Frida Orchestrator:** Attach to processes and inject JS hooks on the fly.
 *   **BYOS Logic:** Dedicated `/frida-scripts` directory with auto-detection for custom scripts.
 
-### 🤖 3. AI-Assisted Bypass Engine
+### 3. AI-Assisted Bypass Engine
 *   **Surgical Hooking:** Extracts relevant Smali code for failed security checks.
 *   **LLM Integration:** Connects to Gemini/Claude/OpenAI to generate custom JS hooks tailored specifically to the app.
 
-### 💾 4. Data Exfiltration Suite
+### 4. Data Exfiltration Suite
 *   **ADB Dumper:** Automatically pulls SQLite `.db` files, `shared_prefs`, and `.so` files from `/data/data/[pkg]/`.
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 | Category | Tools/Frameworks |
 | :--- | :--- |
 | **Language** | Python 3.10+ |
@@ -61,7 +61,7 @@ The goal of APex is to reduce the manual effort required during mobile applicati
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 - Python 3.10+
@@ -79,22 +79,17 @@ The goal of APex is to reduce the manual effort required during mobile applicati
 
 2. **Setup Environment:**
    ```bash
-   pip install -e .
+   pip install -r requirements.txt
    cp .env.example .env # Add your Google API Key here
-   ```
-
-3. **Verify:**
-   ```bash
-   apex --help
    ```
 
 ---
 
-## 📖 Usage Guide
+## Usage Guide
 
-APex features a fully interactive, menu-driven CLI. Simply run:
+APex is an interactive, menu-driven CLI. To start the tool, run:
 ```bash
-apex
+python apex.py
 ```
 
 ### 1. Scan APK
@@ -111,10 +106,10 @@ Select **Option 4** to dump internal app data. APex pulls databases and native l
 
 ---
 
-## 🤝 Contributing
+## Contributing
 Contributions are welcome! Please feel free to submit a Pull Request.
 
 ---
 
-## ⚖️ Disclaimer
+## Disclaimer
 APex is intended for **authorized security auditing and educational purposes only**. Unauthorized access to computer systems is illegal. The author is not responsible for any misuse of this tool.

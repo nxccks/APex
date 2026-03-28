@@ -8,154 +8,46 @@ import subprocess
 from backend.core.scanner import APKScanner
 from backend.core.dynamic import FridaOrchestrator
 from backend.core.dumper import ADBDumper
-from backend.core.utils import AndroidUtils
 from backend.ai.provider import AIProviderFactory
 from backend.config import config
 
-# --- UI Styling ---
-BLOCK_WIDTH = 45
-
-def clr(text, color_code=None):
-    return text
-
-def strip_ansi(text):
-    return text
-
-def get_indent():
-    width = shutil.get_terminal_size().columns
-    return max(0, (width - BLOCK_WIDTH) // 2)
-
-def left_print(text, color_code=None):
-    indent = get_indent()
-    print(" " * indent + text)
-
-def centered_print(text, color_code=None):
-    width = shutil.get_terminal_size().columns
-    padding = (width - len(text)) // 2
-    if padding < 0: padding = 0
-    print(" " * padding + text)
-
 BANNER = r"""
-   ___    ____           
-  /   |  / __ \___  _  __
- / /| | / /_/ / _ \| |/_/
-/ ___ |/ ____/  __/>  <  
-/_/  |_/_/    \___/_/|_|
+    /   |  / __ \___  _  __
+   / /| | / /_/ / _ \| |/_/
+  / ___ |/ ____/  __/>  <  
+ /_/  |_/_/    \___/_/|_|  
 """
 
+def get_width():
+    return shutil.get_terminal_size().columns
+
 def print_header():
-    lines = BANNER.strip("\n").split("\n")
-    indent = get_indent()
-    for line in lines:
-        print(" " * indent + line)
-    print("\n")
+    width = get_width()
+    print()
+    for line in BANNER.split('\n'):
+        if line.strip():
+            print(line.center(width))
+    print()
 
-def left_input(prompt_text, color=None):
-    indent = get_indent()
-    return input(" " * indent + prompt_text).strip()
-
-def check_dependencies():
-    """Check if Java is installed since pyapktool needs it"""
-    try:
-        subprocess.run(["java", "-version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, shell=True)
-    except FileNotFoundError:
-        left_print("[!] Warning: Java (JRE) not found. APK scanning will fail.")
-
-def select_device():
-    devices = AndroidUtils.list_devices()
-    if not devices:
-        left_print("[-] No USB devices found via Frida.")
-        return None
+def c_input(prompt_text="", show_indicator=True):
+    """Displays a centered prompt and centers the input cursor on the line below it"""
+    width = get_width()
+    if prompt_text:
+        print(prompt_text.center(width))
     
-    if len(devices) == 1:
-        return devices[0]
-    
-    left_print("\n[ SELECT DEVICE ]")
-    for i, d in enumerate(devices):
-        left_print(f"{i+1}. {d.name} ({d.id})")
-    
-    choice = left_input("Select device number (default 1): ")
-    try:
-        idx = int(choice) - 1
-        if 0 <= idx < len(devices): return devices[idx]
-    except: pass
-    return devices[0]
-
-def select_package(device_id=None):
-    query = left_input("Search package (enter to list all): ")
-    if query:
-        packages = AndroidUtils.search_packages(query, device_id)
-    else:
-        packages = AndroidUtils.list_packages(device_id)
-    
-    if not packages:
-        left_print("[-] No packages found.")
-        return left_input("Enter package name manually: ")
-
-    left_print("\n[ SELECT PACKAGE ]")
-    display_limit = 10
-    for i, p in enumerate(packages[:display_limit]):
-        left_print(f"{i+1}. {p}")
-    
-    if len(packages) > display_limit:
-        left_print(f"... and {len(packages) - display_limit} more.")
-
-    choice = left_input("Select number or enter manual name: ")
-    try:
-        idx = int(choice) - 1
-        if 0 <= idx < len(packages): return packages[idx]
-    except: pass
-    return choice if choice else None
-
-def print_findings(scanner, findings):
-    left_print("\n[+] STATIC ANALYSIS RESULTS:")
-    if not findings:
-        left_print("    No specific security patterns found.")
-    else:
-        # Group by category
-        summary = {}
-        for f in findings:
-            cat = f['category']
-            if cat not in summary: summary[cat] = []
-            summary[cat].append(f)
-        
-        for cat, items in summary.items():
-            unique_files = {f['file'] for f in items}
-            left_print(f"\n    [!] {cat.upper()} ({len(unique_files)} unique locations)")
-            
-            # Show top 5 unique findings
-            seen_matches = set()
-            count = 0
-            for item in items:
-                if item['match'] in seen_matches: continue
-                seen_matches.add(item['match'])
-                
-                rel = os.path.relpath(item['file'], scanner.output_dir)
-                val = item['match']
-                if len(val) > 60: val = val[:57] + "..."
-                
-                left_print(f"        -> {rel}")
-                left_print(f"           Match: {val}")
-                
-                count += 1
-                if count >= 5: break
-                
-            if len(seen_matches) > 5:
-                left_print(f"        ... and {len(seen_matches)-5} more unique findings")
-    print("")
+    indicator = "> " if show_indicator else ""
+    padding = (width - len(indicator)) // 2
+    return input(" " * padding + indicator).strip()
 
 def interactive_menu():
-    check_dependencies()
-    current_device = None
     while True:
         os.system('cls' if os.name == 'nt' else 'clear')
         print_header()
+        width = get_width()
         
-        if current_device:
-            left_print(f"Connected Device: {current_device.name} ({current_device.id})")
-            left_print("-" * 20)
+        print("[ MAIN MENU ]".center(width))
+        print()
 
-        left_print("[ MAIN MENU ]")
         menu_items = [
             "1. Scan APK (Static Analysis)",
             "2. Inject Frida Script (Dynamic)",
@@ -167,49 +59,38 @@ def interactive_menu():
         ]
         
         for item in menu_items:
-            left_print(item)
+            print(item.center(width))
             
-        print("")
-        left_print("-" * 20)
+        print("\n" + ("-" * 20).center(width))
         
-        choice = left_input("Select an option > ")
+        choice = c_input("Select an option")
+
+        print()
 
         if choice == '1':
-            path = left_input("Enter APK path: ")
+            path = c_input("Enter APK path")
             if os.path.exists(path):
                 scanner = APKScanner(path)
                 if scanner.decompile():
                     findings = scanner.find_security_logic()
-                    print_findings(scanner, findings)
-                else: left_print("[-] Decompilation failed.")
-            else: left_print("[-] File not found.")
+                    print()
+                    print("[+] Findings:".center(width))
+                    print(json.dumps(findings, indent=2))
+                else: print("[-] Decompilation failed.".center(width))
+            else: print("[-] File not found.".center(width))
 
         elif choice == '2':
-            if not current_device: current_device = select_device()
-            if not current_device:
-                left_input("Press Enter to continue...")
-                continue
-            
-            ok, msg = AndroidUtils.verify_frida_environment(current_device)
-            if not ok:
-                left_print(f"[-] {msg}")
-                if not AndroidUtils.is_rooted(current_device.id):
-                    left_print("[!] Device appears to be UNROOTED (Jailed). Frida standard attachment may fail.")
-                left_input("Press Enter to continue anyway...")
-
-            pkg = select_package(current_device.id)
-            if not pkg: continue
-            
-            script = left_input("Enter Script Name: ")
-            orch = FridaOrchestrator(pkg, device=current_device)
-            if orch.attach_and_inject(script): left_print("[+] Injection Success!")
-            else: left_print("[-] Injection Failed.")
+            pkg = c_input("Enter Package Name")
+            script = c_input("Enter Script Name")
+            orch = FridaOrchestrator(pkg)
+            if orch.attach_and_inject(script): print("[+] Injection Success!".center(width))
+            else: print("[-] Injection Failed.".center(width))
 
         elif choice == '3':
-            file_path = left_input("Enter path to Smali snippet file: ")
+            file_path = c_input("Enter path to Smali snippet file")
             if os.path.exists(file_path):
                 with open(file_path, 'r') as f: code = f.read()
-                cat = left_input("Category (default: ssl_pinning): ") or "ssl_pinning"
+                cat = c_input("Category (default: ssl_pinning)") or "ssl_pinning"
                 try:
                     provider = AIProviderFactory.get_provider()
                     hook = provider.generate_hook(code, cat)
@@ -217,79 +98,64 @@ def interactive_menu():
                     if not os.path.exists(config.FRIDA_SCRIPTS_PATH):
                         os.makedirs(config.FRIDA_SCRIPTS_PATH)
                     with open(out, "w") as f: f.write(hook)
-                    left_print(f"\n[+] Saved to {out}\n")
+                    print()
+                    print(f"[+] Saved to {out}".center(width))
                     print(hook)
-                except Exception as e: left_print(f"[-] AI Error: {e}")
-            else: left_print("[-] File not found.")
+                except Exception as e: print(f"[-] AI Error: {e}".center(width))
+            else: print("[-] File not found.".center(width))
 
         elif choice == '4':
-            if not current_device: current_device = select_device()
-            if not current_device:
-                left_input("Press Enter to continue...")
-                continue
-            
-            pkg = select_package(current_device.id)
-            if not pkg: continue
-            
-            dumper = ADBDumper(pkg, device_id=current_device.id)
+            pkg = c_input("Enter Package Name")
+            dumper = ADBDumper(pkg)
             results = dumper.pull_data()
-            left_print("\n[+] Exfiltration Results:")
+            print()
+            print("[+] Exfiltration Results:".center(width))
             for r in results:
-                status = "DONE" if r['status'] == 'pulled' else "FAIL"
-                left_print(f"  {status} {r['target']}")
+                status = "V" if r['status'] == 'pulled' else "X"
+                print(f"{status} {r['target']}".center(width))
 
         elif choice == '5':
             scripts = FridaOrchestrator(None).list_scripts()
-            left_print("\n[+] Script Library:")
-            if not scripts: left_print("(No scripts found in frida-scripts/)")
-            for s in scripts: left_print(f"  - {s}")
+            print()
+            print("[+] Script Library:".center(width))
+            print()
+            if not scripts: print("(No scripts found in frida-scripts/)".center(width))
+            for s in scripts:
+                print(f"- {s}".center(width))
 
         elif choice == '6':
-            current_device = select_device()
+            print("[*] Feature coming soon: Select/Change ADB Device".center(width))
 
         elif choice == '0':
-            left_print("Exiting APex...")
+            print("Exiting APex...".center(width))
             break
         
-        left_input("Press Enter to return to menu...")
+        print()
+        c_input("Press Enter to return to menu", show_indicator=False)
 
 def main():
     parser = argparse.ArgumentParser(description="🛡️  APex CLI", add_help=False)
     parser.add_argument('-h', '--help', action='help')
     subparsers = parser.add_subparsers(dest="command")
     
-    scan_p = subparsers.add_parser("scan")
-    scan_p.add_argument("apk_path")
-    
-    inject_p = subparsers.add_parser("inject")
-    inject_p.add_argument("package_name")
-    inject_p.add_argument("script_name")
-    
-    hook_p = subparsers.add_parser("generate-hook")
-    hook_p.add_argument("smali_file")
-    
-    exfil_p = subparsers.add_parser("exfiltrate")
-    exfil_p.add_argument("package_name")
-    
+    subparsers.add_parser("scan").add_argument("apk_path")
+    subparsers.add_parser("inject").add_argument("package_name")
     subparsers.add_parser("list-scripts")
+    subparsers.add_parser("exfiltrate").add_argument("package_name")
+    subparsers.add_parser("generate-hook").add_argument("smali_file")
 
     if len(sys.argv) == 1:
         interactive_menu()
         return
 
     args = parser.parse_args()
-
     if args.command == "scan":
         scanner = APKScanner(args.apk_path)
-        if scanner.decompile():
-            findings = scanner.find_security_logic()
-            print_findings(scanner, findings)
+        if scanner.decompile(): print(json.dumps(scanner.find_security_logic(), indent=2))
     elif args.command == "list-scripts":
         for s in FridaOrchestrator(None).list_scripts(): print(f"  - {s}")
     elif args.command == "inject":
         FridaOrchestrator(args.package_name).attach_and_inject(args.script_name)
-    elif args.command == "exfiltrate":
-        ADBDumper(args.package_name).pull_data()
 
 if __name__ == "__main__":
     main()
