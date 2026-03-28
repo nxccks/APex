@@ -46,8 +46,6 @@ class APKScanner:
         try:
             tree = ET.parse(self.manifest_path)
             root = tree.getroot()
-            ns = {'android': 'http://schemas.android.com/apk/res/android'}
-
             application = root.find('application')
             if application is not None:
                 risks["debuggable"] = application.get('{http://schemas.android.com/apk/res/android}debuggable') == "true"
@@ -68,8 +66,8 @@ class APKScanner:
             pass
         return risks
 
-    def find_security_logic(self):
-        """Comprehensive scan for vulnerabilities and secrets"""
+    def find_security_logic(self, progress_callback=None):
+        """Comprehensive scan for vulnerabilities with progress reporting"""
         patterns = {
             "Secrets & API Keys": {
                 "Google API Key": r"AIza[0-9A-Za-z-_]{35}",
@@ -95,18 +93,31 @@ class APKScanner:
         
         report = {"Manifest Risks": self.find_manifest_risks(), "Code Findings": {}}
         
+        # Collect all smali files
+        smali_files = []
         for root, dirs, files in os.walk(self.output_dir):
             for file in files:
                 if file.endswith(".smali"):
-                    file_path = os.path.join(root, file)
-                    with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                        content = f.read()
-                        for category, sub_patterns in patterns.items():
-                            if category not in report["Code Findings"]: report["Code Findings"][category] = []
-                            for name, regex in sub_patterns.items():
-                                matches = re.findall(regex, content)
-                                if matches:
-                                    # Clean up matches for better reporting
-                                    clean_matches = list(set([str(m[1]) if isinstance(m, tuple) else str(m) for m in matches]))
-                                    report["Code Findings"][category].append({"type": name, "file": os.path.relpath(file_path, self.output_dir), "matches": clean_matches[:5]})
+                    smali_files.append(os.path.join(root, file))
+        
+        total_files = len(smali_files)
+        
+        for idx, file_path in enumerate(smali_files):
+            # Update progress
+            if progress_callback:
+                progress_callback(idx + 1, total_files)
+                
+            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                content = f.read()
+                for category, sub_patterns in patterns.items():
+                    if category not in report["Code Findings"]: report["Code Findings"][category] = []
+                    for name, regex in sub_patterns.items():
+                        matches = re.findall(regex, content)
+                        if matches:
+                            clean_matches = list(set([str(m[1]) if isinstance(m, tuple) else str(m) for m in matches]))
+                            report["Code Findings"][category].append({
+                                "type": name, 
+                                "file": os.path.relpath(file_path, self.output_dir), 
+                                "matches": clean_matches[:5]
+                            })
         return report

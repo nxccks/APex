@@ -5,6 +5,8 @@ import json
 import os
 import shutil
 import subprocess
+import threading
+import time
 from backend.core.scanner import APKScanner
 from backend.core.dynamic import FridaOrchestrator
 from backend.core.dumper import ADBDumper
@@ -37,13 +39,47 @@ def c_input(prompt_text="", newline=True):
             return input(INDENT + f"{prompt_text} > ").strip()
     return input(INDENT + "> ").strip()
 
+def print_progress_bar(current, total, prefix="Analyzing APK"):
+    """Displays an indented progress bar"""
+    width = 40
+    percent = float(current) * 100 / total
+    filled = int(width * current // total)
+    bar = "█" * filled + "-" * (width - filled)
+    sys.stdout.write(f"\r{INDENT}{prefix}: |{bar}| {percent:.1f}%")
+    sys.stdout.flush()
+    if current == total:
+        print()
+
+def run_task_with_loading(task_func, prefix="Decompiling APK"):
+    """Runs a task in a thread and displays a simulated progress bar"""
+    done = False
+    result = [None]
+
+    def target():
+        nonlocal done
+        result[0] = task_func()
+        done = True
+
+    thread = threading.Thread(target=target)
+    thread.start()
+
+    current = 0
+    total = 100
+    while not done:
+        if current < 95:
+            current += 1
+        print_progress_bar(current, total, prefix=prefix)
+        time.sleep(0.1)
+
+    print_progress_bar(100, 100, prefix=prefix)
+    return result[0]
+
 def print_report(data):
     """Prints a professional, indented security report"""
-    print(INDENT + "=" * 60)
+    print("\n" + INDENT + "=" * 60)
     print(INDENT + "MOBILE SECURITY SCAN REPORT")
     print(INDENT + "=" * 60 + "\n")
 
-    # 1. Manifest Analysis
     m = data["Manifest Risks"]
     print(INDENT + "[ MANIFEST CONFIGURATION ]")
     print(INDENT + f"  - Debuggable:      {'[!!] YES' if m['debuggable'] else 'No'}")
@@ -61,14 +97,12 @@ def print_report(data):
             print(INDENT + f"    (... {len(m['exported_components'])-5} more)")
     print()
 
-    # 2. Code Findings
     print(INDENT + "[ CODE-LEVEL FINDINGS ]")
     findings_found = False
     for category, findings in data["Code Findings"].items():
         if findings:
             findings_found = True
             print(INDENT + f"  > {category}:")
-            # Group by type to avoid repetition
             grouped = {}
             for f in findings:
                 if f["type"] not in grouped: grouped[f["type"]] = []
@@ -76,7 +110,7 @@ def print_report(data):
             
             for ftype, instances in grouped.items():
                 print(INDENT + f"    - {ftype} ({len(instances)} instances)")
-                for inst in instances[:2]: # Show first 2 files
+                for inst in instances[:2]:
                     print(INDENT + f"      @ {inst['file']}")
                     if inst['matches']:
                         val = inst['matches'][0][:50] + "..." if len(inst['matches'][0]) > 50 else inst['matches'][0]
@@ -118,12 +152,17 @@ def interactive_menu():
             path = c_input("Enter APK path")
             if os.path.exists(path):
                 scanner = APKScanner(path)
-                if scanner.decompile():
-                    findings = scanner.find_security_logic()
-                    print()
-                    print_report(findings)
-                else: print(INDENT + "[-] Decompilation failed.")
-            else: print(INDENT + "[-] File not found.")
+                # Run decompilation with loading bar
+                success = run_task_with_loading(scanner.decompile, prefix="Decompiling APK")
+                
+                if success:
+                    # Run static analysis with real progress bar
+                    report = scanner.find_security_logic(progress_callback=print_progress_bar)
+                    print_report(report)
+                else:
+                    print(INDENT + "[-] Decompilation failed.")
+            else:
+                print(INDENT + "[-] File not found.")
 
         elif choice == '2':
             pkg = c_input("Enter Package Name")
@@ -165,7 +204,7 @@ def interactive_menu():
             print("\n" + INDENT + "[+] Script Library:\n")
             if not scripts: print(INDENT + "(No scripts found in frida-scripts/)")
             for s in scripts:
-                print(INDENT + f"  - {s}")
+                print(indent + f"  - {s}")
 
         elif choice == '6':
             print(INDENT + "[*] Feature coming soon: Select/Change ADB Device")
@@ -196,7 +235,7 @@ def main():
     if args.command == "scan":
         scanner = APKScanner(args.apk_path)
         if scanner.decompile():
-            report = scanner.find_security_logic()
+            report = scanner.find_security_logic(progress_callback=print_progress_bar)
             print_report(report)
 
 if __name__ == "__main__":
