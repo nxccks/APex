@@ -185,11 +185,8 @@ def interactive_menu():
                     s_sel = c_input("\nEnter number")
                     try:
                         script_name = scripts[int(s_sel)-1]
-                        print(f"\n{INDENT}[*] Injecting {script_name} into {pkg}...")
-                        if orch.attach_and_inject(script_name):
-                            print(INDENT + "[+] Injection Success! Press Enter to keep process alive.")
-                            input()
-                        else: print(INDENT + "[-] Injection Failed.")
+                        print()
+                        orch.attach_and_inject(script_name)
                     except: print(INDENT + "[-] Invalid selection.")
 
         elif choice == '3':
