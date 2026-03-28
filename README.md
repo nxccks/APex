@@ -82,10 +82,5 @@ Select Option 4 to dump internal app data. APex pulls databases and native libra
 
 ---
 
-## Contributing
-Contributions are welcome. Please feel free to submit a Pull Request.
-
----
-
 ## Disclaimer
 **APex** is intended for authorized security auditing and educational purposes only. Unauthorized access to computer systems is illegal. The author is not responsible for any misuse of this tool.
