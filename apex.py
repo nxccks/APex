@@ -140,33 +140,46 @@ def select_previous_session():
 
 def explore_loot_workflow(package_name):
     explorer = LootExplorer(config.DOWNLOADS_PATH)
-    files = explorer.list_files(package_name)
-    if not files:
-        print(INDENT + "[-] No files found in this session.")
-        return
-    print(f"\n{INDENT}[ FILES IN {package_name} ]")
-    for i, f in enumerate(files): print(INDENT + f"{i+1}. {f}")
-    print()
-    f_sel = c_input("Select file number to view")
-    try:
-        file_rel_path = files[int(f_sel)-1]
-        if file_rel_path.endswith(".db") and explorer.is_sqlite(os.path.join(config.DOWNLOADS_PATH, package_name, file_rel_path)):
-            db_data = explorer.explore_db(package_name, file_rel_path)
-            for table, content in db_data.get("tables", {}).items():
-                print(f"\n{INDENT}--- TABLE: {table} ---")
-                print(INDENT + " | ".join(content["columns"]))
-                for row in content["rows"]: print(INDENT + " | ".join(map(str, row)))
-        else:
-            print(f"\n{INDENT}--- FILE CONTENT ---")
-            print(explorer.view_file(package_name, file_rel_path))
-
-    except: print(INDENT + "[-] Invalid selection.")
+    
+    while True:
+        files = explorer.list_files(package_name)
+        if not files:
+            print(INDENT + "[-] No files found in this session.")
+            return
+        
+        print(f"\n{INDENT}[ FILES IN {package_name} ]")
+        for i, f in enumerate(files): print(INDENT + f"{i+1}. {f}")
+        print(INDENT + "0. Back to Main Menu")
+        print()
+        
+        f_sel = c_input("Select file number to view")
+        if f_sel == '0': break
+        
+        try:
+            file_rel_path = files[int(f_sel)-1]
+            full_path = os.path.join(config.DOWNLOADS_PATH, package_name, file_rel_path)
+            
+            # Detect SQLite by magic header, not just extension
+            if explorer.is_sqlite(full_path):
+                db_data = explorer.explore_db(package_name, file_rel_path)
+                for table, content in db_data.get("tables", {}).items():
+                    print(f"\n{INDENT}--- TABLE: {table} ---")
+                    print(INDENT + " | ".join(content["columns"]))
+                    for row in content["rows"]: print(INDENT + " | ".join(map(str, row)))
+            else:
+                print(f"\n{INDENT}--- FILE CONTENT ---")
+                print(explorer.view_file(package_name, file_rel_path))
+                
+            c_input("\nPress Enter to return to file list", newline=False, indicator="")
+        except: 
+            print(INDENT + "[-] Invalid selection.")
+            time.sleep(1)
 
 def interactive_menu():
     devices = list_adb_devices()
     if devices: config.ACTIVE_DEVICE_ID = devices[0]["id"]
-    current_session = None # Directory name
-    active_pkg = None      # Actual package name
+    current_session = None
+    active_pkg = None
 
     while True:
         os.system('cls' if os.name == 'nt' else 'clear')
@@ -226,7 +239,7 @@ def interactive_menu():
                 print_report(report)
                 c_input("Press Enter to continue", newline=False, indicator="")
             
-            elif choice == '2': # Inject
+            elif choice == '2':
                 if not active_pkg: active_pkg = select_package()
                 if active_pkg:
                     orch = FridaOrchestrator(active_pkg)
@@ -239,7 +252,7 @@ def interactive_menu():
                     try: orch.attach_and_inject(scripts[int(s_sel)-1])
                     except: pass
 
-            elif choice == '3': # Exfiltrate
+            elif choice == '3':
                 if not active_pkg: active_pkg = select_package()
                 if active_pkg:
                     dumper = ADBDumper(active_pkg)
@@ -251,9 +264,8 @@ def interactive_menu():
                         print(f"{INDENT}  {status} {r['target']}")
                     print(f"\n{INDENT}[*] Entering Loot Explorer...")
                     explore_loot_workflow(active_pkg)
-                    c_input("Press Enter to continue", newline=False, indicator="")
 
-            elif choice == '4': # Templates
+            elif choice == '4':
                 templates = HookTemplates()
                 list_t = templates.list_templates()
                 print(INDENT + "[ SELECT HOOK TEMPLATE ]")
@@ -292,7 +304,6 @@ def main():
     subparsers = parser.add_subparsers(dest="command")
     if len(sys.argv) == 1: interactive_menu()
     else:
-        # Simple non-interactive scan support
         args = parser.parse_args()
 
 if __name__ == "__main__": main()
