@@ -18,25 +18,19 @@ class APKScanner:
 
     def decompile(self):
         """Decompiles the APK using the managed apktool.jar directly"""
-        if not self.apk_path:
-            return False
-            
-        if not os.path.exists(config.TEMP_DECOMPILED_PATH):
-            os.makedirs(config.TEMP_DECOMPILED_PATH)
-
+        if not self.apk_path: return False
+        if not os.path.exists(config.TEMP_DECOMPILED_PATH): os.makedirs(config.TEMP_DECOMPILED_PATH)
         if not os.path.exists(self.apktool_jar):
             try:
                 import pyapktool.pyapktool as pat
                 pat.Apktool("pyapktool_tools").get()
-            except ImportError:
-                return False
+            except ImportError: return False
 
         try:
             cmd = ["java", "-jar", self.apktool_jar, "d", self.apk_path, "-o", self.output_dir, "-f"]
             subprocess.run(cmd, check=True, shell=True, capture_output=True)
             return True
-        except subprocess.CalledProcessError:
-            return False
+        except subprocess.CalledProcessError: return False
 
     def find_manifest_risks(self):
         """Parses AndroidManifest.xml for misconfigurations"""
@@ -62,13 +56,13 @@ class APKScanner:
         return risks
 
     def find_security_logic(self, progress_callback=None):
-        """Comprehensive scan for vulnerabilities, secrets, and sensitive assets"""
+        """Comprehensive scan for vulnerabilities, secrets, and high-risk assets"""
         patterns = {
             "Secrets & API Keys": {
                 "Google API Key": r"AIza[0-9A-Za-z-_]{35}",
                 "AWS Access Key": r"AKIA[0-9A-Z]{16}",
                 "Firebase URL": r"https://.*\.firebaseio\.com",
-                "Generic Secret": r"(?i)(api_key|secret_key|auth_token|db_password)\s*[:=]\s*['\"]([^'\"]+)['\"]"
+                "Generic Secret": r"(?i)(api_key|secret_key|auth_token|db_password|access_token)\s*[:=]\s*['\"]([^'\"]+)['\"]"
             },
             "Network & API Endpoints": {
                 "HTTP Endpoint": r"http://[a-zA-Z0-9\./_-]+",
@@ -80,26 +74,45 @@ class APKScanner:
             }
         }
         
-        report = {
-            "Manifest Risks": self.find_manifest_risks(),
-            "Code Findings": {},
-            "Sensitive Assets": []
-        }
+        report = {"Manifest Risks": self.find_manifest_risks(), "Code Findings": {}, "Sensitive Assets": []}
         
-        # 1. Walk through all files to find sensitive assets
-        sensitive_exts = [".env", ".json", ".xml", ".properties", ".conf", ".ini"]
+        # High-risk detection criteria
+        high_risk_names = [".env", "credentials", "secret", "password", "google-services", "client_secret", "auth_config"]
+        high_risk_exts = [".jks", ".keystore", ".p12", ".pem", ".cert", ".pkcs12"]
+        noise_dirs = ["res/anim", "res/color", "res/layout", "res/drawable", "res/values", "res/mipmap", "res/animator"]
+        noise_prefixes = ["abc_", "mtrl_", "design_", "androidx_", "notification_", "messenger_"]
+
         all_scan_files = []
         
         for root, dirs, files in os.walk(self.output_dir):
+            rel_dir = os.path.relpath(root, self.output_dir).replace("\\", "/")
+            
+            # Skip entire noise directories
+            if any(rel_dir.startswith(nd) for nd in noise_dirs):
+                continue
+
             for file in files:
+                file_lower = file.lower()
+                rel_path = os.path.join(rel_dir, file)
                 full_path = os.path.join(root, file)
-                rel_path = os.path.relpath(full_path, self.output_dir)
                 
-                if any(ext in file.lower() for ext in sensitive_exts) or ".env" in file.lower():
-                    if "assets" in rel_path or "res" in rel_path:
-                        report["Sensitive Assets"].append(rel_path)
+                # Filter out framework noise
+                if any(file_lower.startswith(np) for np in noise_prefixes):
+                    continue
+
+                is_sensitive = False
+                # 1. Check for high-risk filenames
+                if any(hr in file_lower for hr in high_risk_names):
+                    is_sensitive = True
                 
-                if file.endswith(".smali") or file.endswith(".env") or file.endswith(".json"):
+                # 2. Check for sensitive extensions
+                if any(file_lower.endswith(ext) for ext in high_risk_exts):
+                    is_sensitive = True
+
+                if is_sensitive:
+                    report["Sensitive Assets"].append(rel_path)
+                    all_scan_files.append(full_path)
+                elif file.endswith(".smali") or file.endswith(".json") or file.endswith(".xml") or file.endswith(".env"):
                     all_scan_files.append(full_path)
 
         # 2. Run regex scan
