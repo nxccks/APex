@@ -150,7 +150,7 @@ def explore_loot_workflow(package_name):
     f_sel = c_input("Select file number to view")
     try:
         file_rel_path = files[int(f_sel)-1]
-        if file_rel_path.endswith(".db"):
+        if file_rel_path.endswith(".db") and explorer.is_sqlite(os.path.join(config.DOWNLOADS_PATH, package_name, file_rel_path)):
             db_data = explorer.explore_db(package_name, file_rel_path)
             for table, content in db_data.get("tables", {}).items():
                 print(f"\n{INDENT}--- TABLE: {table} ---")
@@ -158,7 +158,8 @@ def explore_loot_workflow(package_name):
                 for row in content["rows"]: print(INDENT + " | ".join(map(str, row)))
         else:
             print(f"\n{INDENT}--- FILE CONTENT ---")
-            print(explorer.view_xml(package_name, file_rel_path))
+            print(explorer.view_file(package_name, file_rel_path))
+
     except: print(INDENT + "[-] Invalid selection.")
 
 def interactive_menu():
