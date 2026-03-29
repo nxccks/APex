@@ -55,6 +55,45 @@ class APKScanner:
         except: pass
         return risks
 
+    def get_security_context(self):
+        """Ultra-conservative extraction of Smali methods to fit in free tier TPM limits"""
+        context_patterns = [
+            r"X509TrustManager", r"checkServerTrusted", r"CertificatePinner", 
+            r"Superuser\.apk", r"root-checker", r"which su"
+        ]
+        
+        aggregated_code = ""
+        found_methods = 0
+        char_limit = 15000 # Hard character limit for TPM safety
+        
+        for root, dirs, files in os.walk(self.output_dir):
+            for file in files:
+                if file.endswith(".smali"):
+                    file_path = os.path.join(root, file)
+                    try:
+                        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                            content = f.read()
+                            for pat in context_patterns:
+                                matches = re.finditer(pat, content, re.IGNORECASE)
+                                for match in matches:
+                                    start = max(0, content.rfind('.method', 0, match.start()))
+                                    end = content.find('.end method', match.end()) + 11
+                                    
+                                    if start != -1 and end != -1:
+                                        method_code = content[start:end]
+                                        if method_code not in aggregated_code:
+                                            block = f"\n--- FILE: {os.path.relpath(file_path, self.output_dir)} ---\n{method_code}\n"
+                                            if len(aggregated_code) + len(block) < char_limit:
+                                                aggregated_code += block
+                                                found_methods += 1
+                                            else:
+                                                return aggregated_code # Hit char limit
+                                            
+                                    if found_methods >= 5: # Max 5 methods for TPM safety
+                                        return aggregated_code
+                    except: pass
+        return aggregated_code
+
     def find_security_logic(self, progress_callback=None):
         """Comprehensive scan for vulnerabilities, secrets, and high-risk assets"""
         patterns = {
@@ -75,47 +114,27 @@ class APKScanner:
         }
         
         report = {"Manifest Risks": self.find_manifest_risks(), "Code Findings": {}, "Sensitive Assets": []}
-        
-        # High-risk detection criteria
         high_risk_names = [".env", "credentials", "secret", "password", "google-services", "client_secret", "auth_config"]
         high_risk_exts = [".jks", ".keystore", ".p12", ".pem", ".cert", ".pkcs12"]
         noise_dirs = ["res/anim", "res/color", "res/layout", "res/drawable", "res/values", "res/mipmap", "res/animator"]
         noise_prefixes = ["abc_", "mtrl_", "design_", "androidx_", "notification_", "messenger_"]
 
         all_scan_files = []
-        
         for root, dirs, files in os.walk(self.output_dir):
             rel_dir = os.path.relpath(root, self.output_dir).replace("\\", "/")
-            
-            # Skip entire noise directories
-            if any(rel_dir.startswith(nd) for nd in noise_dirs):
-                continue
-
+            if any(rel_dir.startswith(nd) for nd in noise_dirs): continue
             for file in files:
                 file_lower = file.lower()
                 rel_path = os.path.join(rel_dir, file)
                 full_path = os.path.join(root, file)
-                
-                # Filter out framework noise
-                if any(file_lower.startswith(np) for np in noise_prefixes):
-                    continue
-
-                is_sensitive = False
-                # 1. Check for high-risk filenames
-                if any(hr in file_lower for hr in high_risk_names):
-                    is_sensitive = True
-                
-                # 2. Check for sensitive extensions
-                if any(file_lower.endswith(ext) for ext in high_risk_exts):
-                    is_sensitive = True
-
+                if any(file_lower.startswith(np) for np in noise_prefixes): continue
+                is_sensitive = any(hr in file_lower for hr in high_risk_names) or any(file_lower.endswith(ext) for ext in high_risk_exts)
                 if is_sensitive:
                     report["Sensitive Assets"].append(rel_path)
                     all_scan_files.append(full_path)
                 elif file.endswith(".smali") or file.endswith(".json") or file.endswith(".xml") or file.endswith(".env"):
                     all_scan_files.append(full_path)
 
-        # 2. Run regex scan
         total_files = len(all_scan_files)
         for idx, file_path in enumerate(all_scan_files):
             if progress_callback: progress_callback(idx + 1, total_files)
