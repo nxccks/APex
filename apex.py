@@ -145,6 +145,7 @@ def explore_loot_workflow(package_name):
         files = explorer.list_files(package_name)
         if not files:
             print(INDENT + "[-] No files found in this session.")
+            c_input("Press Enter to return to menu", newline=False, indicator="")
             return
         
         print(f"\n{INDENT}[ FILES IN {package_name} ]")

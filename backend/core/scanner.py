@@ -35,34 +35,26 @@ class APKScanner:
         except subprocess.CalledProcessError: return False
 
     def load_cached_report(self):
-        """Returns the previously saved report if it exists"""
         if os.path.exists(self.report_cache_path):
             try:
-                with open(self.report_cache_path, 'r') as f:
-                    return json.load(f)
+                with open(self.report_cache_path, 'r') as f: return json.load(f)
             except: return None
         return None
 
     def save_report(self, report):
-        """Saves the report to the local directory for fast loading"""
         try:
-            with open(self.report_cache_path, 'w') as f:
-                json.dump(report, f, indent=4)
+            with open(self.report_cache_path, 'w') as f: json.dump(report, f, indent=4)
         except: pass
 
     def get_package_name(self):
-        """Extracts the package name from AndroidManifest.xml"""
-        if not os.path.exists(self.manifest_path):
-            return None
+        if not os.path.exists(self.manifest_path): return None
         try:
             tree = ET.parse(self.manifest_path)
             root = tree.getroot()
             return root.get('package')
-        except:
-            return None
+        except: return None
 
     def find_manifest_risks(self):
-        """Parses AndroidManifest.xml for misconfigurations"""
         risks = {"permissions": [], "exported_components": [], "debuggable": False, "allow_backup": True, "cleartext_traffic": False}
         if not os.path.exists(self.manifest_path): return risks
         try:
@@ -84,37 +76,16 @@ class APKScanner:
         except: pass
         return risks
 
-    def get_security_context(self):
-        """Surgically extracts relevant Smali methods for AI analysis"""
-        context_patterns = [r"X509TrustManager", r"checkServerTrusted", r"CertificatePinner", r"Superuser\.apk", r"root-checker", r"which su"]
-        aggregated_code = ""
-        found_methods = 0
-        char_limit = 15000 
-        for root, dirs, files in os.walk(self.output_dir):
-            for file in files:
-                if file.endswith(".smali"):
-                    try:
-                        with open(os.path.join(root, file), 'r', encoding='utf-8', errors='ignore') as f:
-                            content = f.read()
-                            for pat in context_patterns:
-                                matches = re.finditer(pat, content, re.IGNORECASE)
-                                for match in matches:
-                                    start = max(0, content.rfind('.method', 0, match.start()))
-                                    end = content.find('.end method', match.end()) + 11
-                                    if start != -1 and end != -1:
-                                        method_code = content[start:end]
-                                        if method_code not in aggregated_code:
-                                            block = f"\n--- FILE: {os.path.relpath(os.path.join(root, file), self.output_dir)} ---\n{method_code}\n"
-                                            if len(aggregated_code) + len(block) < char_limit:
-                                                aggregated_code += block
-                                                found_methods += 1
-                                            else: return aggregated_code 
-                                    if found_methods >= 5: return aggregated_code
-                    except: pass
-        return aggregated_code
+    def extract_strings_from_so(self, file_path):
+        """Simple implementation of the 'strings' utility to extract text from .so binaries"""
+        try:
+            with open(file_path, 'rb') as f:
+                data = f.read()
+            # Find sequences of 4 or more printable ASCII characters
+            return "".join([m.decode('ascii', errors='ignore') for m in re.findall(b'[ -~]{4,}', data)])
+        except: return ""
 
     def find_security_logic(self, progress_callback=None):
-        """Comprehensive scan for vulnerabilities and secrets"""
         patterns = {
             "Secrets & API Keys": {
                 "Google API Key": r"AIza[0-9A-Za-z-_]{35}",
@@ -147,18 +118,23 @@ class APKScanner:
                 rel_path = os.path.join(rel_dir, file)
                 if any(file_lower.startswith(np) for np in noise_prefixes): continue
                 is_sensitive = any(hr in file_lower for hr in high_risk_names) or any(file_lower.endswith(ext) for ext in high_risk_exts)
-                if is_sensitive:
-                    report["Sensitive Assets"].append(rel_path)
-                    all_scan_files.append(os.path.join(root, file))
-                elif file.endswith(".smali") or file.endswith(".json") or file.endswith(".xml") or file.endswith(".env"):
+                if is_sensitive: report["Sensitive Assets"].append(rel_path)
+                
+                # Target .smali, .env, .json, .xml, AND .so files
+                if file.endswith((".smali", ".env", ".json", ".xml", ".so")):
                     all_scan_files.append(os.path.join(root, file))
 
         total_files = len(all_scan_files)
         for idx, file_path in enumerate(all_scan_files):
             if progress_callback: progress_callback(idx + 1, total_files)
             try:
-                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                    content = f.read()
+                if file_path.endswith(".so"):
+                    content = self.extract_strings_from_so(file_path)
+                else:
+                    with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                        content = f.read()
+                
+                if content:
                     for category, sub_patterns in patterns.items():
                         if category not in report["Code Findings"]: report["Code Findings"][category] = []
                         for name, regex in sub_patterns.items():
@@ -168,6 +144,5 @@ class APKScanner:
                                 report["Code Findings"][category].append({"type": name, "file": os.path.relpath(file_path, self.output_dir), "matches": clean_matches[:5]})
             except: pass
         
-        # Cache for next time
         self.save_report(report)
         return report
