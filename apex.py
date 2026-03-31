@@ -77,19 +77,18 @@ def run_task_with_loading(task_func, prefix="Decompiling APK"):
         return result[0]
     print_progress_bar(100, 100, prefix=prefix)
     return result[0]
+
 def print_report(data):
     print("\n" + INDENT + "=" * 60)
     print(INDENT + "MOBILE SECURITY SCAN REPORT")
     print(INDENT + "=" * 60 + "\n")
-
-    # 0. Tech Stack
+    
     if data.get("Technologies"):
         print(INDENT + "[ IDENTIFIED TECHNOLOGIES ]")
         print(INDENT + "  - " + ", ".join(data["Technologies"]))
         print()
 
-    # 1. Manifest Analysis
-
+    m = data["Manifest Risks"]
     print(INDENT + "[ MANIFEST CONFIGURATION ]")
     print(INDENT + f"  - Debuggable:      {'[!!] YES' if m['debuggable'] else 'No'}")
     print(INDENT + f"  - Allow Backup:    {'[!] YES' if m['allow_backup'] else 'No'}")
@@ -147,27 +146,21 @@ def select_previous_session():
 
 def explore_loot_workflow(package_name):
     explorer = LootExplorer(config.DOWNLOADS_PATH)
-    
     while True:
         files = explorer.list_files(package_name)
         if not files:
             print(INDENT + "[-] No files found in this session.")
             c_input("Press Enter to return to menu", newline=False, indicator="")
             return
-        
         print(f"\n{INDENT}[ FILES IN {package_name} ]")
         for i, f in enumerate(files): print(INDENT + f"{i+1}. {f}")
         print(INDENT + "0. Back to Main Menu")
         print()
-        
         f_sel = c_input("Select file number to view")
         if f_sel == '0': break
-        
         try:
             file_rel_path = files[int(f_sel)-1]
             full_path = os.path.join(config.DOWNLOADS_PATH, package_name, file_rel_path)
-            
-            # Detect SQLite by magic header, not just extension
             if explorer.is_sqlite(full_path):
                 db_data = explorer.explore_db(package_name, file_rel_path)
                 for table, content in db_data.get("tables", {}).items():
@@ -177,11 +170,8 @@ def explore_loot_workflow(package_name):
             else:
                 print(f"\n{INDENT}--- FILE CONTENT ---")
                 print(explorer.view_file(package_name, file_rel_path))
-                
             c_input("\nPress Enter to return to file list", newline=False, indicator="")
-        except: 
-            print(INDENT + "[-] Invalid selection.")
-            time.sleep(1)
+        except: time.sleep(1)
 
 def interactive_menu():
     devices = list_adb_devices()
@@ -200,12 +190,13 @@ def interactive_menu():
             print(INDENT + "3. Select/Change Device")
             print(INDENT + "0. Exit")
         else:
-            print(INDENT + "1. View/Rescan Security Report")
-            print(INDENT + "2. Inject Frida Script (Dynamic)")
-            print(INDENT + "3. Exfiltrate & Explore Loot")
-            print(INDENT + "4. Hook Template Generator")
-            print(INDENT + "5. Switch App / New Scan")
-            print(INDENT + "6. Select/Change Device")
+            print(INDENT + "1. View Security Report")
+            print(INDENT + "2. Perform Full Rescan")
+            print(INDENT + "3. Inject Frida Script (Dynamic)")
+            print(INDENT + "4. Exfiltrate & Explore Loot")
+            print(INDENT + "5. Hook Template Generator")
+            print(INDENT + "6. Switch App / New Scan")
+            print(INDENT + "7. Select/Change Device")
             print(INDENT + "0. Exit")
 
         print("\n" + INDENT + "-" * 20)
@@ -222,7 +213,6 @@ def interactive_menu():
                         active_pkg = scanner.get_package_name()
                         print_report(scanner.find_security_logic(progress_callback=print_progress_bar))
                         c_input("Press Enter to continue", newline=False, indicator="")
-                else: print(INDENT + "[-] File not found.")
             elif choice == '2':
                 dir_name = select_previous_session()
                 if dir_name:
@@ -243,11 +233,20 @@ def interactive_menu():
             if choice == '1':
                 scanner = APKScanner(existing_dir=os.path.join(config.TEMP_DECOMPILED_PATH, current_session))
                 report = scanner.load_cached_report()
-                if not report: report = scanner.find_security_logic(progress_callback=print_progress_bar)
+                if not report: 
+                    print(INDENT + "[*] No cached report. Running scan...")
+                    report = scanner.find_security_logic(progress_callback=print_progress_bar)
                 print_report(report)
                 c_input("Press Enter to continue", newline=False, indicator="")
             
-            elif choice == '2':
+            elif choice == '2': # Actual Rescan
+                print(INDENT + "[*] Starting full rescan...")
+                scanner = APKScanner(existing_dir=os.path.join(config.TEMP_DECOMPILED_PATH, current_session))
+                report = scanner.find_security_logic(progress_callback=print_progress_bar)
+                print_report(report)
+                c_input("Press Enter to continue", newline=False, indicator="")
+
+            elif choice == '3':
                 if not active_pkg: active_pkg = select_package()
                 if active_pkg:
                     orch = FridaOrchestrator(active_pkg)
@@ -260,7 +259,7 @@ def interactive_menu():
                     try: orch.attach_and_inject(scripts[int(s_sel)-1])
                     except: pass
 
-            elif choice == '3':
+            elif choice == '4':
                 if not active_pkg: active_pkg = select_package()
                 if active_pkg:
                     dumper = ADBDumper(active_pkg)
@@ -273,7 +272,7 @@ def interactive_menu():
                     print(f"\n{INDENT}[*] Entering Loot Explorer...")
                     explore_loot_workflow(active_pkg)
 
-            elif choice == '4':
+            elif choice == '5':
                 templates = HookTemplates()
                 list_t = templates.list_templates()
                 print(INDENT + "[ SELECT HOOK TEMPLATE ]")
@@ -291,11 +290,11 @@ def interactive_menu():
                 except: pass
                 c_input("Press Enter to continue", newline=False, indicator="")
 
-            elif choice == '5':
+            elif choice == '6':
                 current_session = None
                 active_pkg = None
             
-            elif choice == '6':
+            elif choice == '7':
                 devices = list_adb_devices()
                 if devices:
                     print(INDENT + "[ SELECT DEVICE ]")
@@ -311,7 +310,6 @@ def main():
     parser.add_argument('-h', '--help', action='help')
     subparsers = parser.add_subparsers(dest="command")
     if len(sys.argv) == 1: interactive_menu()
-    else:
-        args = parser.parse_args()
+    else: pass
 
 if __name__ == "__main__": main()
