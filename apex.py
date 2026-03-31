@@ -77,12 +77,19 @@ def run_task_with_loading(task_func, prefix="Decompiling APK"):
         return result[0]
     print_progress_bar(100, 100, prefix=prefix)
     return result[0]
-
 def print_report(data):
     print("\n" + INDENT + "=" * 60)
     print(INDENT + "MOBILE SECURITY SCAN REPORT")
     print(INDENT + "=" * 60 + "\n")
-    m = data["Manifest Risks"]
+
+    # 0. Tech Stack
+    if data.get("Technologies"):
+        print(INDENT + "[ IDENTIFIED TECHNOLOGIES ]")
+        print(INDENT + "  - " + ", ".join(data["Technologies"]))
+        print()
+
+    # 1. Manifest Analysis
+
     print(INDENT + "[ MANIFEST CONFIGURATION ]")
     print(INDENT + f"  - Debuggable:      {'[!!] YES' if m['debuggable'] else 'No'}")
     print(INDENT + f"  - Allow Backup:    {'[!] YES' if m['allow_backup'] else 'No'}")

@@ -54,6 +54,31 @@ class APKScanner:
             return root.get('package')
         except: return None
 
+    def detect_tech_stack(self):
+        """Identifies the frameworks and technologies used by the app"""
+        technologies = []
+        signatures = {
+            "Flutter": ["libflutter.so", "assets/flutter_assets"],
+            "React Native": ["libreactnativejni.so", "assets/index.android.bundle"],
+            "Xamarin": ["libmonosgen-2.0.so", "assemblies/mscorlib.dll"],
+            "Unity": ["libunity.so", "assets/bin/Data"],
+            "Cordova/PhoneGap": ["assets/www/index.html", "assets/www/cordova.js"],
+            "Kotlin": ["kotlin/kotlin.kotlin_builtins", "kotlin/reflect/reflect.kotlin_builtins"]
+        }
+
+        # Search for signatures in the decompiled directory
+        for tech, files in signatures.items():
+            for sig in files:
+                full_sig_path = os.path.join(self.output_dir, sig.replace("/", os.sep))
+                if os.path.exists(full_sig_path):
+                    technologies.append(tech)
+                    break
+        
+        if not technologies:
+            technologies.append("Native (Java/Kotlin)")
+        
+        return list(set(technologies))
+
     def find_manifest_risks(self):
         risks = {"permissions": [], "exported_components": [], "debuggable": False, "allow_backup": True, "cleartext_traffic": False}
         if not os.path.exists(self.manifest_path): return risks
@@ -77,11 +102,8 @@ class APKScanner:
         return risks
 
     def extract_strings_from_so(self, file_path):
-        """Simple implementation of the 'strings' utility to extract text from .so binaries"""
         try:
-            with open(file_path, 'rb') as f:
-                data = f.read()
-            # Find sequences of 4 or more printable ASCII characters
+            with open(file_path, 'rb') as f: data = f.read()
             return "".join([m.decode('ascii', errors='ignore') for m in re.findall(b'[ -~]{4,}', data)])
         except: return ""
 
@@ -103,7 +125,13 @@ class APKScanner:
             }
         }
         
-        report = {"Manifest Risks": self.find_manifest_risks(), "Code Findings": {}, "Sensitive Assets": []}
+        report = {
+            "Technologies": self.detect_tech_stack(),
+            "Manifest Risks": self.find_manifest_risks(), 
+            "Code Findings": {}, 
+            "Sensitive Assets": []
+        }
+        
         high_risk_names = [".env", "credentials", "secret", "password", "google-services", "client_secret", "auth_config"]
         high_risk_exts = [".jks", ".keystore", ".p12", ".pem", ".cert", ".pkcs12"]
         noise_dirs = ["res/anim", "res/color", "res/layout", "res/drawable", "res/values", "res/mipmap", "res/animator"]
@@ -119,8 +147,6 @@ class APKScanner:
                 if any(file_lower.startswith(np) for np in noise_prefixes): continue
                 is_sensitive = any(hr in file_lower for hr in high_risk_names) or any(file_lower.endswith(ext) for ext in high_risk_exts)
                 if is_sensitive: report["Sensitive Assets"].append(rel_path)
-                
-                # Target .smali, .env, .json, .xml, AND .so files
                 if file.endswith((".smali", ".env", ".json", ".xml", ".so")):
                     all_scan_files.append(os.path.join(root, file))
 
@@ -128,12 +154,7 @@ class APKScanner:
         for idx, file_path in enumerate(all_scan_files):
             if progress_callback: progress_callback(idx + 1, total_files)
             try:
-                if file_path.endswith(".so"):
-                    content = self.extract_strings_from_so(file_path)
-                else:
-                    with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                        content = f.read()
-                
+                content = self.extract_strings_from_so(file_path) if file_path.endswith(".so") else open(file_path, 'r', encoding='utf-8', errors='ignore').read()
                 if content:
                     for category, sub_patterns in patterns.items():
                         if category not in report["Code Findings"]: report["Code Findings"][category] = []
